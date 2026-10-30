@@ -47,9 +47,10 @@
   </div>
 
   <h2 id="ida">Ida: transmissão de uma leitura</h2>
-  <p>Do nó acordando até a leitura gravada no notebook. Repare nos dois pontos que garantem que nenhuma perda passe despercebida:
-    a leitura é numerada antes do envio, e a ponte conta o que descarta.</p>
-  <div class="card"><div class="graph-wrap"><div class="tools"></div><div class="graph" id="g-ida" style="height:1250px"></div></div>
+  <p>Do nó acordando até a leitura gravada no notebook. Três ideias sustentam o desenho: a leitura é numerada e carimbada com a
+    hora antes do envio; ela fica guardada no nó até a ponte responder que a aceitou (<a href="decisoes.md">D-001</a>); e essa
+    resposta leva a hora do notebook, que acerta o relógio do nó (<a href="decisoes.md">D-002</a>).</p>
+  <div class="card"><div class="graph-wrap"><div class="tools"></div><div class="graph" id="g-ida" style="height:1450px"></div></div>
     <div class="detail"></div></div>
 
   <h2 id="volta">Volta: retorno de uma configuração</h2>
@@ -71,7 +72,7 @@
     <tr><td><b>adaptado</b></td><td>Janela de configuração do nó</td><td><code>aguardarPrioridadeConfiguracao()</code></td><td>1650 ms passa a 300 ms</td></tr>
     <tr><td><b>adaptado</b></td><td>Callback que enfileira, fila e task de envio</td><td>MS-006 (<code>MeuProjetoESP32.ino:531-645</code>)</td><td>Fila de 64 que conta descartes; lotes; reenvio sem descartar</td></tr>
     <tr><td><b>adaptado</b></td><td>Configuração pendente por nó na ponte</td><td><code>DeviceManager</code> (MAC e config pendente)</td><td>A fonte passa a ser o servidor</td></tr>
-    <tr><td><b>novo</b></td><td>Numeração das leituras (sessão + seq), confirmação pela camada MAC, contador de descartes, MQTT, servidor no notebook</td><td>—</td><td>—</td></tr>
+    <tr><td><b>novo</b></td><td>Numeração e hora das leituras, buffer no nó (D-001), resposta da ponte com a hora (D-002), confirmação pela camada MAC, contadores de descarte, MQTT, servidor no notebook</td><td>—</td><td>—</td></tr>
     <tr><td><b>não entra</b></td><td>Parser de 3 formatos, cópia da telemetria no <code>DeviceManager</code>, <code>checkScheduleTimeout</code>, modos ONLINE e LIGHT_SLEEP, nome e uptime no nó, interface <code>web/</code>, <code>TecladoMatriz</code></td><td>—</td><td>Ficam no protótipo como referência</td></tr>
   </table></div>
 
@@ -84,6 +85,8 @@
     <li><a href="opscon/3.0-servidor-ingestao.md">3.0 — Servidor: ingestão e configurações</a></li>
     <li><a href="opscon/catalogo-sinais.md">Catálogo de sinais</a> (quem emite e quem consome cada sinal)</li>
   </ul>
+  <p>As decisões que mudaram o desenho estão em <a href="decisoes.md">decisoes.md</a>: D-001 (o nó guarda as leituras não
+    entregues) e D-002 (a ponte responde com a hora e o nó carimba a medição).</p>
 </main>
 
 <footer>Fluxogramas lidos de <code>data/sistema.json</code>. Depois de editar o JSON, rode

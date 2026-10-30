@@ -19,7 +19,7 @@
      "id": "n1",
      "kind": "start",
      "label": "Nó acorda do deep sleep",
-     "detail": "O ESP32 do nó recomeça do setup(). O estado do ciclo (sessão, seq, canal, MAC da ponte, intervalo, config_id) fica na memória RTC. Origem: ciclo de deep sleep do ESP_Periferico_Chuva.ino, sem os modos ONLINE e LIGHT_SLEEP e sem a janela de pareamento de 60 s. Card 1.0.",
+     "detail": "O ESP32 do nó recomeça do setup(). O estado do ciclo (sessão, seq, buffer de leituras, relógio, canal, MAC da ponte, intervalo, config_id) fica na memória RTC. Origem: ciclo de deep sleep do ESP_Periferico_Chuva.ino, sem os modos ONLINE e LIGHT_SLEEP e sem a janela de pareamento de 60 s. Card 1.0.",
      "origem": "adaptado"
     },
     {
@@ -32,8 +32,8 @@
     {
      "id": "n3",
      "kind": "sleep",
-     "label": "Numera a leitura\n(sessão + seq)",
-     "detail": "seq aumenta 1 a cada leitura medida, mesmo que ela não chegue a ser entregue: assim toda perda vira uma lacuna visível no servidor. A sessão é um número aleatório criado a cada reset. Card 1.0.",
+     "label": "Numera, carimba a hora\ne põe no buffer (RTC, até 64)",
+     "detail": "seq aumenta 1 a cada leitura; ts_medicao é a hora do relógio do nó (0 se ainda não foi acertado desde que ligou). A leitura vai para o fim do buffer na memória RTC; cheio, a mais antiga é descartada e contada (descartes_no). Decisões D-001 e D-002. Card 1.0.",
      "origem": "novo"
     },
     {
@@ -47,21 +47,21 @@
      "id": "n5",
      "kind": "sleep",
      "label": "Varre os canais 1 a 13\nouvindo o beacon",
-     "detail": "Escuta cada canal até 600 ms (a ponte emite beacon a cada 500 ms). Resolve o problema do canal fixo da versão anterior: o nó segue o canal do roteador. Origem: descoberta pelo beacon de EspNowPeriferico.cpp, com varredura nova. Card 1.0. Se não achar a ponte, a leitura numerada se perde e aparece como lacuna no servidor.",
+     "detail": "Escuta cada canal até 600 ms (a ponte emite beacon a cada 500 ms). O nó segue o canal do roteador, em vez de ficar preso no canal 1. Se não achar a ponte, as leituras ficam no buffer. Origem: descoberta pelo beacon de EspNowPeriferico.cpp, com varredura nova. Card 1.0.",
      "origem": "adaptado"
     },
     {
      "id": "n6",
      "kind": "sleep",
-     "label": "Envia LEITURA\n(ESP-NOW unicast)",
-     "detail": "Pacote do contrato IF-01 v1: nó, sessão, seq, grandeza, valor, tempo acordado no ciclo anterior, intervalo e config_id em uso. Card 1.0.",
+     "label": "Envia a leitura mais antiga\ndo buffer (ESP-NOW unicast)",
+     "detail": "Pacote do contrato IF-01 v1: nó, sessão, seq, grandeza, valor, ts_medicao, descartes do nó, tempo acordado no ciclo anterior, intervalo e config_id em uso. Card 1.0.",
      "origem": "adaptado"
     },
     {
      "id": "n7",
      "kind": "dec",
      "label": "Confirmado pela camada MAC?\n(até 2 envios)",
-     "detail": "O rádio da ponte confirma o recebimento (callback de envio do ESP-NOW). São 2 envios no total. Card 1.0.",
+     "detail": "Primeiro nível de confirmação: o rádio da ponte recebeu (callback de envio do ESP-NOW). São 2 envios no total. Card 1.0.",
      "origem": "novo"
     },
     {
@@ -74,8 +74,29 @@
     {
      "id": "n9b",
      "kind": "sleep",
-     "label": "Dorme sem entregar\n(a leitura vira lacuna)",
-     "detail": "O seq já foi usado; o servidor vê o salto e conta a perda. Card 1.0.",
+     "label": "Dorme com as leituras\nno buffer",
+     "detail": "Nada se perde: as leituras são enviadas no próximo ciclo em que a ponte responder (D-001). Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n7r",
+     "kind": "dec",
+     "label": "Ponte respondeu?\n(RESPOSTA em até 100 ms)",
+     "detail": "Segundo nível de confirmação: a ponte diz se aceitou a leitura na fila e manda a hora atual (D-002). Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n7a",
+     "kind": "sleep",
+     "label": "Tira a leitura do buffer\ne acerta o relógio",
+     "detail": "Só a resposta \"aceita\" tira a leitura do buffer. Toda resposta com hora acerta o relógio do nó, que assim fica certo a cada ciclo. Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n7c",
+     "kind": "dec",
+     "label": "Ainda há leituras no buffer\ne menos de 10 envios no ciclo?",
+     "detail": "Depois de uma queda, o nó entrega as pendentes aos poucos: no máximo 10 por ciclo, para não ficar muito tempo acordado. Card 1.0.",
      "origem": "novo"
     },
     {
@@ -109,8 +130,8 @@
     {
      "id": "p3",
      "kind": "io",
-     "label": "Descarta e conta\n(contador de descartes)",
-     "detail": "A versão anterior jogava fora a leitura mais antiga sem registro. Agora a nova é recusada e o contador vai em todo lote ao servidor. Card 2.0.",
+     "label": "Recusa e conta\n(o nó guarda a leitura)",
+     "detail": "Com a fila cheia, a ponte não descarta em silêncio: responde \"recusada\", e a leitura continua no buffer do nó. O contador de descartes vai em todo lote. Card 2.0.",
      "origem": "novo"
     },
     {
@@ -119,6 +140,13 @@
      "label": "Fila de eventos\n(64)",
      "detail": "Leituras e confirmações de configuração esperam aqui pelo despacho.",
      "origem": "adaptado"
+    },
+    {
+     "id": "pr",
+     "kind": "io",
+     "label": "Responde ao nó: aceita ou recusada\n+ hora atual (MSG_RESPOSTA)",
+     "detail": "Sai logo depois da chegada da leitura. A hora é a do relógio da ponte, acertado pela hora do notebook; 0 se a ponte ainda não recebeu nenhuma. Card 2.0, decisão D-002.",
+     "origem": "novo"
     },
     {
      "id": "p5",
@@ -165,8 +193,15 @@
     {
      "id": "s3",
      "kind": "sub",
-     "label": "Responde com as\nconfigurações pendentes",
-     "detail": "A resposta do lote leva as configurações que o operador criou e que ainda não foram confirmadas. Ver o fluxograma de retorno. Card 3.0.",
+     "label": "Responde com as configurações\npendentes e a hora do notebook",
+     "detail": "A resposta do lote leva as configurações pendentes e \"agora\", a hora atual do notebook, que é a referência de hora do sistema (D-002). Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "p13",
+     "kind": "io",
+     "label": "Ponte acerta o relógio\npela hora do notebook",
+     "detail": "É essa hora que a ponte repassa aos nós em cada resposta. Card 2.0 e 2.1, decisão D-002.",
      "origem": "novo"
     }
    ],
@@ -199,13 +234,64 @@
      "label": "achou"
     },
     {
+     "from": "n5",
+     "to": "n9b",
+     "label": "não achou"
+    },
+    {
      "from": "n6",
      "to": "n7"
     },
     {
      "from": "n7",
-     "to": "n8",
+     "to": "n7r",
      "label": "sim"
+    },
+    {
+     "from": "n7",
+     "to": "n7b",
+     "label": "não"
+    },
+    {
+     "from": "n7b",
+     "to": "n5",
+     "label": "não: redescobre",
+     "style": "back"
+    },
+    {
+     "from": "n7b",
+     "to": "n9b",
+     "label": "sim"
+    },
+    {
+     "from": "n7r",
+     "to": "n7a",
+     "label": "aceita"
+    },
+    {
+     "from": "n7r",
+     "to": "n8",
+     "label": "recusada"
+    },
+    {
+     "from": "n7r",
+     "to": "n9b",
+     "label": "sem resposta"
+    },
+    {
+     "from": "n7a",
+     "to": "n7c"
+    },
+    {
+     "from": "n7c",
+     "to": "n6",
+     "label": "sim: próxima",
+     "style": "back"
+    },
+    {
+     "from": "n7c",
+     "to": "n8",
+     "label": "não"
     },
     {
      "from": "n8",
@@ -229,6 +315,19 @@
      "from": "p2",
      "to": "p3",
      "label": "não"
+    },
+    {
+     "from": "p4",
+     "to": "pr"
+    },
+    {
+     "from": "p3",
+     "to": "pr"
+    },
+    {
+     "from": "pr",
+     "to": "n7r",
+     "label": "rádio ESP-NOW"
     },
     {
      "from": "p4",
@@ -267,25 +366,9 @@
      "to": "s3"
     },
     {
-     "from": "n7",
-     "to": "n7b",
-     "label": "não"
-    },
-    {
-     "from": "n7b",
-     "to": "n5",
-     "label": "não: redescobre",
-     "style": "back"
-    },
-    {
-     "from": "n7b",
-     "to": "n9b",
-     "label": "sim"
-    },
-    {
-     "from": "n5",
-     "to": "n9b",
-     "label": "não achou"
+     "from": "s3",
+     "to": "p13",
+     "label": "resposta do lote"
     }
    ]
   },
