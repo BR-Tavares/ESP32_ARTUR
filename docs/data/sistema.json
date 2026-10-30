@@ -1,0 +1,454 @@
+{
+ "schema": 1,
+ "source_commit": "proposta (sem código ainda)",
+ "kinds": [
+  "start",
+  "step",
+  "dec",
+  "io",
+  "sleep",
+  "sub"
+ ],
+ "graphs": {
+  "g-ida": {
+   "title": "Transmissão de uma leitura (ida)",
+   "direction": "UD",
+   "note": "Azul = nó sensor · laranja = ponte · lilás = servidor no notebook · amarelo tracejado = decisão · verde = início. A etiqueta [importado], [adaptado] ou [novo] diz de onde vem cada bloco em relação à versão anterior (MeuProjetoESP32, commit 3bde339). Card OpsCon de cada máquina em docs/opscon/.",
+   "nodes": [
+    {
+     "id": "n1",
+     "kind": "start",
+     "label": "Nó acorda do deep sleep",
+     "detail": "O ESP32 do nó recomeça do setup(). O estado do ciclo (sessão, seq, canal, MAC da ponte, intervalo, config_id) fica na memória RTC. Origem: ciclo de deep sleep do ESP_Periferico_Chuva.ino, sem os modos ONLINE e LIGHT_SLEEP e sem a janela de pareamento de 60 s. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n2",
+     "kind": "sleep",
+     "label": "Mede a chuva\n(SensorChuvaMHRD)",
+     "detail": "Liga o sensor pelo BJT por 50 ms, faz a média de 8 leituras do ADC e desliga. Origem: SensorChuvaMHRD.h/.cpp, sem alteração. Card 1.0.",
+     "origem": "importado"
+    },
+    {
+     "id": "n3",
+     "kind": "sleep",
+     "label": "Numera a leitura\n(sessão + seq)",
+     "detail": "seq aumenta 1 a cada leitura medida, mesmo que ela não chegue a ser entregue: assim toda perda vira uma lacuna visível no servidor. A sessão é um número aleatório criado a cada reset. Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n4",
+     "kind": "dec",
+     "label": "Ponte conhecida?",
+     "detail": "O canal e o MAC da ponte ficam na memória RTC desde o último ciclo. Origem: rtcMacCentral e rtcCentralConhecido do ESP_Periferico_Chuva.ino, agora com o canal junto. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n5",
+     "kind": "sleep",
+     "label": "Varre os canais 1 a 13\nouvindo o beacon",
+     "detail": "Escuta cada canal até 600 ms (a ponte emite beacon a cada 500 ms). Resolve o problema do canal fixo da versão anterior: o nó segue o canal do roteador. Origem: descoberta pelo beacon de EspNowPeriferico.cpp, com varredura nova. Card 1.0. Se não achar a ponte, a leitura numerada se perde e aparece como lacuna no servidor.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n6",
+     "kind": "sleep",
+     "label": "Envia LEITURA\n(ESP-NOW unicast)",
+     "detail": "Pacote do contrato IF-01 v1: nó, sessão, seq, grandeza, valor, tempo acordado no ciclo anterior, intervalo e config_id em uso. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n7",
+     "kind": "dec",
+     "label": "Confirmado pela camada MAC?\n(até 2 envios)",
+     "detail": "O rádio da ponte confirma o recebimento (callback de envio do ESP-NOW). São 2 envios no total. Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n7b",
+     "kind": "dec",
+     "label": "Já redescobriu\nneste ciclo?",
+     "detail": "A redescoberta depois de falha acontece no máximo 1 vez por ciclo, para o nó não ficar preso acordado. Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n9b",
+     "kind": "sleep",
+     "label": "Dorme sem entregar\n(a leitura vira lacuna)",
+     "detail": "O seq já foi usado; o servidor vê o salto e conta a perda. Card 1.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "n8",
+     "kind": "sleep",
+     "label": "Janela de configuração\n(até 300 ms)",
+     "detail": "Espera uma configuração que a ponte já tem guardada; por isso a janela caiu de 1650 ms para 300 ms. Ver o fluxograma de retorno. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n9",
+     "kind": "sleep",
+     "label": "Nó dorme o intervalo",
+     "detail": "Guarda o tempo que ficou acordado (vai na próxima leitura) e entra em deep sleep. Origem: entrarDeepSleep() de EspNowPeriferico.cpp. Card 1.0.",
+     "origem": "importado"
+    },
+    {
+     "id": "p1",
+     "kind": "io",
+     "label": "Ponte: callback de recepção\nvalida e carimba t_rx e RSSI",
+     "detail": "Roda no core 0, junto com o Wi-Fi: só confere versão, tipo e tamanho, anota a hora de chegada e a força do sinal e passa adiante. Não espera a rede. Origem: callback que enfileira, da MS-006 (MeuProjetoESP32.ino:593-645). Card 2.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p2",
+     "kind": "dec",
+     "label": "Fila com vaga?",
+     "detail": "Fila FreeRTOS de 64 eventos (antes 20).",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p3",
+     "kind": "io",
+     "label": "Descarta e conta\n(contador de descartes)",
+     "detail": "A versão anterior jogava fora a leitura mais antiga sem registro. Agora a nova é recusada e o contador vai em todo lote ao servidor. Card 2.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "p4",
+     "kind": "io",
+     "label": "Fila de eventos\n(64)",
+     "detail": "Leituras e confirmações de configuração esperam aqui pelo despacho.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p5",
+     "kind": "io",
+     "label": "Despacho (core 1):\nmonta um lote de até 10 eventos",
+     "detail": "Task separada, para a espera da rede não travar o rádio. O atraso de cada evento (agora menos t_rx) vai no lote. Origem: TaskPushMiniPC da MS-006, agora com lotes. Card 2.1.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p6",
+     "kind": "io",
+     "label": "Envia o lote\nHTTP POST ou MQTT",
+     "detail": "Contrato IF-02 v1, um formato só. HTTP: POST /api/v1/eventos. MQTT: publica em sitio/<ponte>/eventos com QoS 1. O transporte é escolhido na compilação. Origem do HTTP: HTTPClient da MS-006; MQTT é novo. Card 2.1.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p7",
+     "kind": "dec",
+     "label": "Servidor aceitou?",
+     "detail": "HTTP 200, ou confirmação de publicação no MQTT.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p8",
+     "kind": "io",
+     "label": "Guarda o lote e espera\n(1 s, 2 s, 4 s … até 30 s)",
+     "detail": "Nada é descartado depois de entrar na fila: o mesmo lote é reenviado até ser aceito. Enquanto isso a fila acumula. Card 2.1.",
+     "origem": "novo"
+    },
+    {
+     "id": "s1",
+     "kind": "sub",
+     "label": "Servidor grava o lote cru",
+     "detail": "FastAPI + SQLite no notebook. O corpo é gravado como chegou antes de qualquer interpretação: nada que chega se perde, nem um lote malformado. Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "s2",
+     "kind": "sub",
+     "label": "Grava os eventos\n(leituras e confirmações)",
+     "detail": "Uma linha por leitura, com nó, sessão, seq, valor, RSSI e atraso. As métricas (entrega, lacunas, duplicatas) saem dessas linhas. Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "s3",
+     "kind": "sub",
+     "label": "Responde com as\nconfigurações pendentes",
+     "detail": "A resposta do lote leva as configurações que o operador criou e que ainda não foram confirmadas. Ver o fluxograma de retorno. Card 3.0.",
+     "origem": "novo"
+    }
+   ],
+   "edges": [
+    {
+     "from": "n1",
+     "to": "n2"
+    },
+    {
+     "from": "n2",
+     "to": "n3"
+    },
+    {
+     "from": "n3",
+     "to": "n4"
+    },
+    {
+     "from": "n4",
+     "to": "n6",
+     "label": "sim"
+    },
+    {
+     "from": "n4",
+     "to": "n5",
+     "label": "não"
+    },
+    {
+     "from": "n5",
+     "to": "n6",
+     "label": "achou"
+    },
+    {
+     "from": "n6",
+     "to": "n7"
+    },
+    {
+     "from": "n7",
+     "to": "n8",
+     "label": "sim"
+    },
+    {
+     "from": "n8",
+     "to": "n9"
+    },
+    {
+     "from": "n6",
+     "to": "p1",
+     "label": "rádio ESP-NOW"
+    },
+    {
+     "from": "p1",
+     "to": "p2"
+    },
+    {
+     "from": "p2",
+     "to": "p4",
+     "label": "sim"
+    },
+    {
+     "from": "p2",
+     "to": "p3",
+     "label": "não"
+    },
+    {
+     "from": "p4",
+     "to": "p5"
+    },
+    {
+     "from": "p5",
+     "to": "p6"
+    },
+    {
+     "from": "p6",
+     "to": "p7"
+    },
+    {
+     "from": "p7",
+     "to": "s1",
+     "label": "sim"
+    },
+    {
+     "from": "p7",
+     "to": "p8",
+     "label": "não"
+    },
+    {
+     "from": "p8",
+     "to": "p6",
+     "label": "reenvia o mesmo lote",
+     "style": "back"
+    },
+    {
+     "from": "s1",
+     "to": "s2"
+    },
+    {
+     "from": "s2",
+     "to": "s3"
+    },
+    {
+     "from": "n7",
+     "to": "n7b",
+     "label": "não"
+    },
+    {
+     "from": "n7b",
+     "to": "n5",
+     "label": "não: redescobre",
+     "style": "back"
+    },
+    {
+     "from": "n7b",
+     "to": "n9b",
+     "label": "sim"
+    },
+    {
+     "from": "n5",
+     "to": "n9b",
+     "label": "não achou"
+    }
+   ]
+  },
+  "g-volta": {
+   "title": "Retorno de uma configuração (volta)",
+   "direction": "UD",
+   "note": "Como uma mudança de intervalo chega ao nó sem deixá-lo acordado esperando a rede: a ponte guarda a configuração antes de o nó acordar. Mesmas cores e etiquetas do fluxograma de ida. Uma config criada agora chega ao nó em 1 a 2 ciclos de leitura.",
+   "nodes": [
+    {
+     "id": "o1",
+     "kind": "start",
+     "label": "Operador cria uma configuração\n(POST /api/v1/configs)",
+     "detail": "Por enquanto só o intervalo de leitura, entre 5 e 3600 s. Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "s4",
+     "kind": "sub",
+     "label": "Servidor guarda como pendente\n(config_id)",
+     "detail": "Cada configuração tem um número (config_id). Fica pendente até o nó confirmar. Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "s5",
+     "kind": "sub",
+     "label": "Resposta do próximo lote\nleva as pendentes",
+     "detail": "Qualquer lote da ponte recebe a lista atual de configurações pendentes. No MQTT, o servidor publica a lista como mensagem retida em sitio/<ponte>/config. Como o lote que traz a config nasce de uma leitura, a config chega ao nó em 1 a 2 ciclos. Card 3.0.",
+     "origem": "novo"
+    },
+    {
+     "id": "p9",
+     "kind": "io",
+     "label": "Ponte guarda no cache\n(uma config por nó)",
+     "detail": "Origem: fila de configuração pendente do DeviceManager, agora alimentada pelo servidor. Card 2.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n6b",
+     "kind": "sleep",
+     "label": "Nó acorda e envia LEITURA",
+     "detail": "Mesmo envio do fluxograma de ida. A leitura informa o config_id que o nó está usando. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p10",
+     "kind": "dec",
+     "label": "Há config nova\npara este nó?",
+     "detail": "Nova = config_id do cache diferente do config_id da leitura. Se for igual, o nó já aplicou: a ponte limpa o cache. Card 2.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "p11",
+     "kind": "io",
+     "label": "Ponte envia CONFIG\n(ESP-NOW unicast)",
+     "detail": "Sai na hora: o nó já escuta configuração desde o envio da leitura e fica até 300 ms na janela. Origem: enviarConfiguracao() de EspNowCentral.cpp, com o pacote do contrato v1. Card 2.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n10",
+     "kind": "dec",
+     "label": "Chegou dentro\nda janela?",
+     "detail": "Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n11",
+     "kind": "sleep",
+     "label": "Nó aplica o intervalo\nna memória RTC",
+     "detail": "Aceita intervalo entre 5 e 3600 s; fora disso, recusa e confirma com ok = falso. Origem: aplicarNovaConfiguracao() do nó, só com o intervalo (sem modo e nome). Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n12",
+     "kind": "sleep",
+     "label": "Nó envia ACK_CONFIG\n(ok ou recusada) e dorme",
+     "detail": "Confirma com ok = verdadeiro, ou ok = falso se o intervalo estiver fora de 5 a 3600 s; uma config repetida é confirmada de novo. Origem: enviarAckConfiguracao() de EspNowPeriferico.cpp, com o pacote do contrato v1. Card 1.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "n13",
+     "kind": "sleep",
+     "label": "Nó dorme\n(a config fica para o próximo ciclo)",
+     "detail": "Sem configuração nesta janela, o nó dorme normalmente. Se havia uma config nova, ela continua no cache da ponte e é entregue no próximo ciclo. Origem: entrarDeepSleep(). Card 1.0.",
+     "origem": "importado"
+    },
+    {
+     "id": "p12",
+     "kind": "io",
+     "label": "Ponte põe o ACK na fila\ne limpa o cache",
+     "detail": "O ACK segue o mesmo caminho das leituras (fila, lote). Card 2.0.",
+     "origem": "adaptado"
+    },
+    {
+     "id": "s6",
+     "kind": "sub",
+     "label": "Servidor marca a config\ncomo confirmada ou recusada",
+     "detail": "Nos dois casos ela deixa de ser pendente. O tempo entre criar e confirmar entra nas métricas; uma recusa vira alerta ao operador. Card 3.0.",
+     "origem": "novo"
+    }
+   ],
+   "edges": [
+    {
+     "from": "o1",
+     "to": "s4"
+    },
+    {
+     "from": "s4",
+     "to": "s5"
+    },
+    {
+     "from": "s5",
+     "to": "p9",
+     "label": "resposta do lote"
+    },
+    {
+     "from": "p9",
+     "to": "p10"
+    },
+    {
+     "from": "n6b",
+     "to": "p10",
+     "label": "rádio ESP-NOW"
+    },
+    {
+     "from": "p10",
+     "to": "p11",
+     "label": "sim"
+    },
+    {
+     "from": "p10",
+     "to": "n10",
+     "label": "não: nada é enviado"
+    },
+    {
+     "from": "p11",
+     "to": "n10",
+     "label": "rádio ESP-NOW"
+    },
+    {
+     "from": "n10",
+     "to": "n11",
+     "label": "sim"
+    },
+    {
+     "from": "n10",
+     "to": "n13",
+     "label": "não"
+    },
+    {
+     "from": "n11",
+     "to": "n12"
+    },
+    {
+     "from": "n12",
+     "to": "p12",
+     "label": "rádio ESP-NOW"
+    },
+    {
+     "from": "p12",
+     "to": "s6",
+     "label": "lote"
+    }
+   ]
+  }
+ }
+}

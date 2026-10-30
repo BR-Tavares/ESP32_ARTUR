@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transmissão Sítio Online</title>
+<link rel="stylesheet" href="visualizador.css">
+</head>
+<body>
+<header>
+  <h1>Sítio Online: transmissão nó → ponte → servidor</h1>
+  <p class="muted">Proposta do sistema da prova de conceito. Esta é uma especificação nova: ela não descreve mudanças no código
+    anterior, mas usa partes dele como componentes. Cada bloco diz de onde vem. Clique em um bloco para ver o que ele faz.</p>
+  <nav>
+    <a href="#ler">Como ler</a>
+    <a href="#ida">Ida: uma leitura</a>
+    <a href="#volta">Volta: uma configuração</a>
+    <a href="#origem">O que vem da versão anterior</a>
+    <a href="#opscon">Cards OpsCon</a>
+  </nav>
+  <noscript>Os fluxogramas precisam de JavaScript.</noscript>
+</header>
+
+<main>
+  <h2 id="ler">Como ler os fluxogramas</h2>
+  <div class="grid">
+    <div class="box"><b>Três equipamentos</b>
+      <div class="legend" style="margin-top:6px">
+        <span><i style="background:var(--n-sleep-bg);border-color:var(--n-sleep-bd)"></i>nó sensor (ESP32 a bateria)</span>
+        <span><i style="background:var(--n-io-bg);border-color:var(--n-io-bd)"></i>ponte (ESP32 ligado ao Wi-Fi)</span>
+        <span><i style="background:var(--n-sub-bg);border-color:var(--n-sub-bd)"></i>servidor (notebook)</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--n-dec-bg);border-color:var(--n-dec-bd);border-style:dashed"></i>decisão</span>
+        <span><i style="background:var(--n-start-bg);border-color:var(--n-start-bd)"></i>início</span>
+      </div></div>
+    <div class="box"><b>Etiqueta de origem</b>, na última linha de cada bloco:
+      <ul>
+        <li><b>[importado]</b>: vem do código anterior sem mudança de comportamento.</li>
+        <li><b>[adaptado]</b>: a ideia vem do código anterior, com mudança declarada no detalhe do bloco.</li>
+        <li><b>[novo]</b>: não existia.</li>
+      </ul></div>
+    <div class="box"><b>Por que um sistema novo</b>
+      <p>O protótipo anterior (<code>AFilleul/MeuProjetoESP32</code>, branch <code>com-mini-pc</code>, commit <code>3bde339</code>)
+        misturava partes que funcionam com partes de outra arquitetura. Aqui só entra o que serve à transmissão, com nome e papel
+        definidos.</p></div>
+  </div>
+
+  <h2 id="ida">Ida: transmissão de uma leitura</h2>
+  <p>Do nó acordando até a leitura gravada no notebook. Repare nos dois pontos que garantem que nenhuma perda passe despercebida:
+    a leitura é numerada antes do envio, e a ponte conta o que descarta.</p>
+  <div class="card"><div class="graph-wrap"><div class="tools"></div><div class="graph" id="g-ida" style="height:1250px"></div></div>
+    <div class="detail"></div></div>
+
+  <h2 id="volta">Volta: retorno de uma configuração</h2>
+  <p>Como uma mudança de intervalo chega ao nó. A diferença principal para a versão anterior: a ponte já tem a configuração quando
+    o nó acorda, então o nó não fica esperando a ida e volta até o notebook. Em troca, a configuração leva de 1 a 2 ciclos de
+    leitura para chegar.</p>
+  <div class="card"><div class="graph-wrap"><div class="tools"></div><div class="graph" id="g-volta" style="height:1050px"></div></div>
+    <div class="detail"></div></div>
+
+  <h2 id="origem">O que vem da versão anterior</h2>
+  <p class="muted">Referência: <code>AFilleul/MeuProjetoESP32</code>, branch <code>com-mini-pc</code>, commit <code>3bde339</code>.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Origem</th><th>Parte</th><th>De onde vem</th><th>O que muda</th></tr>
+    <tr><td><b>importado</b></td><td>Leitura do sensor de chuva</td><td><code>SensorChuvaMHRD.h/.cpp</code></td><td>Nada</td></tr>
+    <tr><td><b>importado</b></td><td>Deep sleep pelo timer</td><td><code>EspNowPeriferico::entrarDeepSleep()</code></td><td>Nada</td></tr>
+    <tr><td><b>adaptado</b></td><td>Envio da configuração ao nó e ACK</td><td><code>EspNowCentral::enviarConfiguracao()</code>, <code>enviarAckConfiguracao()</code></td><td>Pacotes do contrato v1; ACK com ok ou recusada</td></tr>
+    <tr><td><b>adaptado</b></td><td>Ciclo do nó com estado na memória RTC</td><td><code>ESP_Periferico_Chuva.ino</code></td><td>Só deep sleep; sem ONLINE, LIGHT_SLEEP e janela de 60 s</td></tr>
+    <tr><td><b>adaptado</b></td><td>Descoberta da ponte pelo beacon</td><td><code>aguardarBeaconCentral()</code>, <code>enviarBroadcastBeacon()</code></td><td>Varredura dos canais 1–13; beacon a cada 500 ms</td></tr>
+    <tr><td><b>adaptado</b></td><td>Janela de configuração do nó</td><td><code>aguardarPrioridadeConfiguracao()</code></td><td>1650 ms passa a 300 ms</td></tr>
+    <tr><td><b>adaptado</b></td><td>Callback que enfileira, fila e task de envio</td><td>MS-006 (<code>MeuProjetoESP32.ino:531-645</code>)</td><td>Fila de 64 que conta descartes; lotes; reenvio sem descartar</td></tr>
+    <tr><td><b>adaptado</b></td><td>Configuração pendente por nó na ponte</td><td><code>DeviceManager</code> (MAC e config pendente)</td><td>A fonte passa a ser o servidor</td></tr>
+    <tr><td><b>novo</b></td><td>Numeração das leituras (sessão + seq), confirmação pela camada MAC, contador de descartes, MQTT, servidor no notebook</td><td>—</td><td>—</td></tr>
+    <tr><td><b>não entra</b></td><td>Parser de 3 formatos, cópia da telemetria no <code>DeviceManager</code>, <code>checkScheduleTimeout</code>, modos ONLINE e LIGHT_SLEEP, nome e uptime no nó, interface <code>web/</code>, <code>TecladoMatriz</code></td><td>—</td><td>Ficam no protótipo como referência</td></tr>
+  </table></div>
+
+  <h2 id="opscon">Cards OpsCon</h2>
+  <p>O comportamento de cada máquina, em estados, eventos e sinais, está nos cards em <code>docs/opscon/</code>:</p>
+  <ul>
+    <li><a href="opscon/1.0-no-sensor.md">1.0 — Nó sensor</a></li>
+    <li><a href="opscon/2.0-ponte-recepcao.md">2.0 — Ponte: recepção e retorno</a></li>
+    <li><a href="opscon/2.1-ponte-despacho.md">2.1 — Ponte: despacho</a></li>
+    <li><a href="opscon/3.0-servidor-ingestao.md">3.0 — Servidor: ingestão e configurações</a></li>
+    <li><a href="opscon/catalogo-sinais.md">Catálogo de sinais</a> (quem emite e quem consome cada sinal)</li>
+  </ul>
+</main>
+
+<footer>Fluxogramas lidos de <code>data/sistema.json</code>. Depois de editar o JSON, rode
+  <code>node tools/gen_sistema_js.mjs</code>. <span id="src"></span></footer>
+
+<script src="vendor/vis-network.min.js"></script>
+<script src="data/sistema.js"></script>
+<script src="visualizador.js"></script>
+</body>
+</html>
